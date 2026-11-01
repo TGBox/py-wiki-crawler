@@ -1,43 +1,87 @@
 # py-wiki-crawler
 
-A small python programm to crawl wiki pages recursively and fetch all the available data. Utilizes the offizial api of known wiki page providers like fandom.
+Ein moderner, modularer Wiki-Downloader und Markdown-Konverter für Python.
+Erfasst Spiele-Wikis und Dokumentationen (Fandom, MediaWiki sowie generische HTML-Wikis ohne API) rekursiv und erzeugt eine vollständige, offline navigierbare Markdown-Wissensdatenbank (z. B. für Obsidian, Logseq oder Markdown-Viewer) inklusive aller verlinkten Referenzgrafiken.
+
+## Highlights & Features
+
+- **MediaWiki & Fandom API-Unterstützung:** Erkennt automatisch `api.php` für maximale Geschwindigkeit, Namespace-Filterung und native Redirect-Auflösung.
+- **HTML Fallback-Crawler:** Rekursiver Breadth-First-Crawler (BFS) mit Klicktiefenbegrenzung (`--max-depth`) und automatischer Filterung von Edit-, Versions- und Spezialseiten für Wikis ohne API.
+- **Vollauflösende Grafiken & SHA-256 Deduplizierung:** Bereinigt verkleinerte Thumbnail-Parameter auf Originaldateien und speichert Bilder dedupliziert in `assets/images/`.
+- **Intelligente Querverlinkung:** Interne Wiki-Links (`/wiki/Item/Sword`) werden in relative Pfade auf die lokalen `.md`-Dateien umgeschrieben.
+- **SQLite-Checkpointing & Resilienz:** Speichert den Zustand fortlaufend in `.crawler_state.db` und unterstützt das nahtlose Fortsetzen abgebrochener Downloads (`--resume`).
+- **Höfliches Scraping:** Integriertes Rate-Limiting mit Exponential Backoff bei HTTP 429 / 5xx.
+- **Rich Terminal UI:** Übersichtliche Konsolenanzeige mit Live-Fortschrittsbalken und Abschluss-Statistik.
 
 ## Tech-Stack
 
-- **Sprache:** Python
-- **Build / Packaging:** uv
-- **CI/CD:** GitHub Actions
+- **Sprache:** Python >= 3.11
+- **Paketmanager:** [uv](https://github.com/astral-sh/uv)
+- **Parsing & Konvertierung:** `beautifulsoup4`, `markdownify`
+- **Netzwerk & Terminal:** `requests`, `rich`, `tqdm`
+- **Code-Qualität:** `ruff`, `pytest`
+
 ## Ordnerstruktur
 
 ```text
 py-wiki-crawler/
-├── src/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── build.py
-│   └── tools.py
-├── tests/
-│   └── test_main.py
-├── .github/workflows/ci.yml├── .gitignore
 ├── pyproject.toml
-└── README.md
+├── src/
+│   ├── py_wiki_crawler/
+│   │   ├── cli.py             # Rich-Terminal-Interface & Argument Parsing
+│   │   ├── core/
+│   │   │   ├── engine.py      # Zentraler Crawl- & Export-Orchestrator
+│   │   │   ├── state.py       # SQLite-Zustands- und Checkpoint-Verwaltung
+│   │   │   └── rate_limiter.py# Anfragedrosselung & Exponential Backoff
+│   │   ├── extractors/
+│   │   │   ├── base.py        # Basis-Interface für Wiki-Extraktoren
+│   │   │   ├── mediawiki.py   # MediaWiki API Extraktor (Fandom & co.)
+│   │   │   └── html_crawler.py# Fallback HTML BFS Crawler
+│   │   ├── converters/
+│   │   │   ├── markdown.py    # HTML zu Markdown Konvertierung & Link-Rewriting
+│   │   │   └── images.py      # Vollauflösungs-Download & SHA-256 Deduplizierung
+│   │   └── utils/
+│   │       ├── path_utils.py  # Bereinigung ungültiger Zeichen & Pfadkalkulation
+│   │       └── url_utils.py   # URL-Normalisierung & Filterprüfung
+│   ├── build.py               # PyInstaller Build-Skript
+│   ├── main.py                # Einstiegspunkt
+│   └── tools.py               # Format- & Lint-Helfer
+└── tests/                     # Umfangreiche Testsuite (pytest)
 ```
 
 ## Quickstart
 
 ```bash
-git clone <repo-url>
-cd py-wiki-crawler
+# Repository klonen & Abhängigkeiten synchronisieren
 uv sync
 
-# App ausführen
-uv run main
-# oder:
-uv run py-wiki-crawler
+# Wiki mit Standardeinstellungen herunterladen
+uv run py-wiki-crawler https://genshin-impact.fandom.com
+
+# Mit Optionen (z. B. Zielordner, Begrenzung und ohne Bilder)
+uv run py-wiki-crawler https://hollowknight.fandom.com -o mein_wiki -m 50
+
+# Einen unterbrochenen Crawl nahtlos fortsetzen
+uv run py-wiki-crawler https://hollowknight.fandom.com -o mein_wiki --resume
 
 # Tests ausführen
-uv run test
+uv run pytest
 
-# Exe-Datei mit PyInstaller erstellen
-uv run build
+# Linter & Formatter prüfen
+uv run ruff check .
+uv run ruff format .
 ```
+
+## CLI-Optionen
+
+| Parameter | Beschreibung | Standardwert |
+| :--- | :--- | :--- |
+| `url` | Start-URL des Wikis | *(erforderlich)* |
+| `-o`, `--output` | Zielverzeichnis für Markdown & Assets | `wiki_export` |
+| `-d`, `--delay` | Pause zwischen Anfragen in Sekunden | `0.4` |
+| `-m`, `--max-pages` | Maximale Seitenanzahl zum Herunterladen | `None` (alle) |
+| `--max-depth` | Maximale Klicktiefe für HTML-Crawler | `5` |
+| `--no-images` | Download von Bildern deaktivieren | `False` |
+| `--resume` | Abgebrochenen Crawl aus SQLite-DB fortsetzen | `False` |
+| `-v`, `--verbose` | Ausführliches Debug-Logging | `False` |
+| `--version` | Programmversion anzeigen | - |

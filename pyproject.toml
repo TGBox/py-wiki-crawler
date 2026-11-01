@@ -1,6 +1,6 @@
 [project]
 name = "py-wiki-crawler"
-version = "0.1.1"
+version = "0.2.0"
 description = "A small python programm to crawl wiki pages recursively and fetch all the available data. Utilizes the offizial api of known wiki page providers like fandom."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -9,14 +9,14 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "markdownify>=1.2.3",
     "requests>=2.34.2",
+    "rich>=15.0.0",
     "tqdm>=4.70.1",
 ]
 
 [project.scripts]
-py-wiki-crawler = "src.wiki-crawler:main"
-main = "src.wiki-crawler:main"
-test = "pytest:wiki-crawler"
-build = "src.build:wiki-crawler"
+py-wiki-crawler = "py_wiki_crawler.cli:main"
+main = "py_wiki_crawler.cli:main"
+build = "src.build:main"
 format = "src.tools:format_code"
 lint = "src.tools:lint_code"
 
@@ -34,9 +34,12 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/py_wiki_crawler"]

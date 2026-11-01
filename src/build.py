@@ -4,14 +4,18 @@ import PyInstaller.__main__
 
 
 def main() -> None:
-    args = sys.argv[1:] if len(sys.argv) > 1 else [
-        "--noconfirm",
-        "--onedir",
-        "--console",
-        "src/main.py",
-        "--name",
-        "py-wiki-crawler",
-    ]
+    args = (
+        sys.argv[1:]
+        if len(sys.argv) > 1
+        else [
+            "--noconfirm",
+            "--onedir",
+            "--console",
+            "src/main.py",
+            "--name",
+            "py-wiki-crawler",
+        ]
+    )
     PyInstaller.__main__.run(args)
 
 
