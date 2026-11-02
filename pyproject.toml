@@ -1,6 +1,6 @@
 [project]
 name = "py-wiki-crawler"
-version = "0.2.0"
+version = "1.0.0"
 description = "A small python programm to crawl wiki pages recursively and fetch all the available data. Utilizes the offizial api of known wiki page providers like fandom."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,6 +8,7 @@ license = { text = "MIT" }
 dependencies = [
     "beautifulsoup4>=4.15.0",
     "markdownify>=1.2.3",
+    "pyside6>=6.12.0",
     "requests>=2.34.2",
     "rich>=15.0.0",
     "tqdm>=4.70.1",
@@ -15,6 +16,8 @@ dependencies = [
 
 [project.scripts]
 py-wiki-crawler = "py_wiki_crawler.cli:main"
+py-wiki-crawler-gui = "py_wiki_crawler.gui.app:main"
+gui = "py_wiki_crawler.gui.app:main"
 main = "py_wiki_crawler.cli:main"
 build = "src.build:main"
 format = "src.tools:format_code"

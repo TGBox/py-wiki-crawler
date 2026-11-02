@@ -88,6 +88,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Setzt einen abgebrochenen Crawl anhand der SQLite-Datenbank fort",
     )
     parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Startet die grafische Benutzeroberfläche (PySide6 GUI)",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Aktiviert ausführliches Debug-Logging"
     )
     parser.add_argument("--version", action="version", version=f"py-wiki-crawler {__version__}")
@@ -100,9 +105,19 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.gui:
+        from py_wiki_crawler.gui.app import run_gui
+
+        sys.exit(run_gui())
+
+    if args.gui:
+        from py_wiki_crawler.gui.app import run_gui
+        sys.exit(run_gui())
+
     wiki_url = args.url or args.opt_url
     if not wiki_url:
-        console.print("[bold red]Fehler:[/] Bitte gib eine Wiki-URL an!")
+        # If launched with no args from interactive console, offer or start GUI
+        console.print("[bold red]Fehler:[/] Bitte gib eine Wiki-URL an oder nutze [cyan]--gui[/]!")
         parser.print_help()
         sys.exit(1)
 

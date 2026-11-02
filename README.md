@@ -5,6 +5,11 @@ Erfasst Spiele-Wikis und Dokumentationen (Fandom, MediaWiki sowie generische HTM
 
 ## Highlights & Features
 
+- **Grafische Benutzeroberfläche (PySide6 GUI):**
+  - Unterstützt sowohl **Vollbildmodus** als auch **Fenstermodus** (umschaltbar per Tastenkürzel `F11`, `Esc` oder Button).
+  - Live-Statistiken (Exportierte Seiten, Bilder, Fehler, Stoppuhr).
+  - Farbkodiertes Aktivitäts-Protokoll und dynamische Fortschrittsanzeige.
+  - Asynchroner Hintergrund-Thread (`QThread`), der ein Einfrieren der Oberfläche verhindert.
 - **MediaWiki & Fandom API-Unterstützung:** Erkennt automatisch `api.php` für maximale Geschwindigkeit, Namespace-Filterung und native Redirect-Auflösung.
 - **HTML Fallback-Crawler:** Rekursiver Breadth-First-Crawler (BFS) mit Klicktiefenbegrenzung (`--max-depth`) und automatischer Filterung von Edit-, Versions- und Spezialseiten für Wikis ohne API.
 - **Vollauflösende Grafiken & SHA-256 Deduplizierung:** Bereinigt verkleinerte Thumbnail-Parameter auf Originaldateien und speichert Bilder dedupliziert in `assets/images/`.
@@ -55,7 +60,12 @@ py-wiki-crawler/
 # Repository klonen & Abhängigkeiten synchronisieren
 uv sync
 
-# Wiki mit Standardeinstellungen herunterladen
+# Grafische Benutzeroberfläche (GUI) starten
+uv run gui
+# oder per CLI-Flag:
+uv run py-wiki-crawler --gui
+
+# Wiki im Terminal mit Standardeinstellungen herunterladen
 uv run py-wiki-crawler https://genshin-impact.fandom.com
 
 # Mit Optionen (z. B. Zielordner, Begrenzung und ohne Bilder)
