@@ -287,7 +287,7 @@ wheels = [
 
 [[package]]
 name = "py-wiki-crawler"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },

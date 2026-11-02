@@ -18,6 +18,7 @@ from py_wiki_crawler.extractors.base import BaseExtractor
 from py_wiki_crawler.extractors.html_crawler import HtmlCrawlerExtractor
 from py_wiki_crawler.extractors.mediawiki import MediaWikiExtractor
 from py_wiki_crawler.utils.path_utils import title_to_relative_path
+from py_wiki_crawler.utils.url_utils import clean_image_url
 
 logger = logging.getLogger("py_wiki_crawler.engine")
 
@@ -183,6 +184,17 @@ class CrawlEngine:
         if self.on_log:
             self.on_log(message, level)
 
+    def _image_failure_reasons(self, image_urls: list[str]) -> str:
+        """Summarizes why images failed, e.g. 'HTTP 403: 12x, Timeout: 1x'."""
+        if not self.image_downloader:
+            return ""
+        counts: dict[str, int] = {}
+        for raw_url in image_urls:
+            reason = self.image_downloader.failed_urls.get(clean_image_url(raw_url))
+            if reason:
+                counts[reason] = counts.get(reason, 0) + 1
+        return ", ".join(f"{reason}: {n}x" for reason, n in counts.items())
+
     def _process_single_page(self, url: str, fallback_title: str, depth: int) -> None:
         """Fetches, converts, and writes a single wiki article."""
         result = self.extractor.fetch_page_content(url)
@@ -227,6 +239,9 @@ class CrawlEngine:
             # Markdown is written (with online image links), but the page counts as
             # incomplete so the next run retries the missing images.
             error = f"Gespeichert, aber {len(failed_images)} Bild(er) nicht geladen"
+            reasons = self._image_failure_reasons(failed_images)
+            if reasons:
+                error += f" ({reasons})"
             self.state_manager.mark_page_failed(url, error)
             if self.on_page_failed:
                 self.on_page_failed(url, final_title, error)

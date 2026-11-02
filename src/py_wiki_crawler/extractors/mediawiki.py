@@ -106,6 +106,8 @@ class MediaWikiExtractor(BaseExtractor):
                 "list": "allpages",
                 "aplimit": "500",
                 "apnamespace": "0",  # Main article namespace
+                # Redirects resolve to the same article and would be downloaded twice
+                "apfilterredir": "nonredirects",
                 "format": "json",
             }
             if apfrom:

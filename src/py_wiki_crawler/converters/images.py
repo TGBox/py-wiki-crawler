@@ -33,8 +33,8 @@ class ImageDownloader:
         self.state_manager = state_manager
         self.rate_limiter = rate_limiter or RateLimiter(base_delay=0.1)
         self.session = session or requests.Session()
-        # URLs that already failed in this run (avoids hammering broken URLs on every page)
-        self.failed_urls: set[str] = set()
+        # URL -> failure reason for this run (avoids hammering broken URLs on every page)
+        self.failed_urls: dict[str, str] = {}
 
     def process_and_download_image(self, raw_img_url: str) -> Path | None:
         """
@@ -68,12 +68,12 @@ class ImageDownloader:
             )
             if resp.status_code != 200:
                 logger.warning(f"Bild konnte nicht geladen werden ({resp.status_code}): {full_url}")
-                self.failed_urls.add(full_url)
+                self.failed_urls[full_url] = f"HTTP {resp.status_code}"
                 return None
 
             content = resp.content
             if not content:
-                self.failed_urls.add(full_url)
+                self.failed_urls[full_url] = "leere Antwort"
                 return None
 
             sha256_hash = hashlib.sha256(content).hexdigest()
@@ -131,5 +131,5 @@ class ImageDownloader:
 
         except Exception as e:
             logger.warning(f"Fehler beim Download von Bild {full_url}: {e}")
-            self.failed_urls.add(full_url)
+            self.failed_urls[full_url] = type(e).__name__
             return None
