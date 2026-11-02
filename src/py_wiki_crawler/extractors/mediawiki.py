@@ -5,7 +5,7 @@ Fast, reliable, and handles site pagination, namespaces, and redirects natively.
 
 import logging
 from collections.abc import Iterator
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 import requests
 
@@ -26,6 +26,43 @@ class MediaWikiExtractor(BaseExtractor):
         self.api_endpoint = api_endpoint
         self.session = session
         self.rate_limiter = rate_limiter
+        # The user may enter any article URL (e.g. the main page), so the article
+        # path must come from the wiki itself, not from the entered URL.
+        self.article_prefix = self._resolve_article_prefix()
+
+    def _resolve_article_prefix(self) -> str:
+        """Returns the URL prefix for articles (e.g. 'https://x.fandom.com/wiki/')."""
+        parsed = urlparse(self.base_url)
+        fallback = f"{parsed.scheme}://{parsed.netloc}/wiki/"
+        try:
+            resp = self.session.get(
+                self.api_endpoint,
+                params={"action": "query", "meta": "siteinfo", "format": "json"},
+                timeout=10,
+            )
+            general = resp.json()["query"]["general"]
+            server = general["server"]
+            if server.startswith("//"):
+                server = f"{parsed.scheme}:{server}"
+            article_path = general["articlepath"]
+            if "$1" not in article_path:
+                return fallback
+            return server.rstrip("/") + article_path.split("$1", 1)[0]
+        except Exception as e:
+            logger.warning(f"Artikelpfad konnte nicht ermittelt werden, nutze '{fallback}': {e}")
+            return fallback
+
+    def _article_url(self, title: str) -> str:
+        """Builds the canonical article URL for a page title."""
+        return self.article_prefix + quote(title.replace(" ", "_"))
+
+    def _title_from_url(self, url: str) -> str | None:
+        """Extracts the page title from an article URL of this wiki."""
+        if url.startswith(self.article_prefix):
+            relative = url[len(self.article_prefix) :].split("#", 1)[0].split("?", 1)[0]
+            if relative:
+                return unquote(relative).replace("_", " ")
+        return extract_wiki_title_from_url(url)
 
     @classmethod
     def detect_api(cls, base_url: str, session: requests.Session) -> str | None:
@@ -88,8 +125,7 @@ class MediaWikiExtractor(BaseExtractor):
             pages = data.get("query", {}).get("allpages", [])
             for page in pages:
                 title = page["title"]
-                article_url = f"{self.base_url}/wiki/{quote(title.replace(' ', '_'))}"
-                yield (article_url, title, 0)
+                yield (self._article_url(title), title, 0)
                 count += 1
                 if max_pages and count >= max_pages:
                     return
@@ -104,11 +140,11 @@ class MediaWikiExtractor(BaseExtractor):
     def fetch_page_content(self, url_or_title: str) -> tuple[str, str, str] | None:
         """Parses a page's wikitext into HTML using action=parse."""
         if url_or_title.startswith("http://") or url_or_title.startswith("https://"):
-            title = extract_wiki_title_from_url(url_or_title) or url_or_title
+            title = self._title_from_url(url_or_title) or url_or_title
             source_url = url_or_title
         else:
             title = url_or_title
-            source_url = f"{self.base_url}/wiki/{quote(title.replace(' ', '_'))}"
+            source_url = self._article_url(title)
 
         params = {
             "action": "parse",
