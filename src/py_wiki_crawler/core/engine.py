@@ -70,11 +70,18 @@ class CrawlEngine:
         )
 
         self.extractor: BaseExtractor = self._init_extractor()
+        self._stop_requested = False
 
         # Callbacks for CLI / UI progress tracking
         self.on_page_discovered: Callable[[str, str], None] | None = None
         self.on_page_processed: Callable[[str, str, Path], None] | None = None
         self.on_page_failed: Callable[[str, str, str], None] | None = None
+        self.on_log: Callable[[str, str], None] | None = None
+
+    def stop(self) -> None:
+        """Requests cancellation of the ongoing crawl."""
+        self._stop_requested = True
+        logger.info("Abbruch angefordert...")
 
     def _init_extractor(self) -> BaseExtractor:
         """Probes for MediaWiki API; falls back to BFS HTML crawler if not detected."""
@@ -109,6 +116,9 @@ class CrawlEngine:
         if not self.config.resume or not pending:
             discovered_pages: list[tuple[str, str, int]] = []
             for item in self.extractor.discover_pages(max_pages=self.config.max_pages):
+                if self._stop_requested:
+                    logger.info("Entdeckungsvorgang durch Benutzer abgebrochen.")
+                    break
                 discovered_pages.append(item)
                 if self.on_page_discovered:
                     self.on_page_discovered(item[0], item[1])
@@ -117,12 +127,16 @@ class CrawlEngine:
 
         # 2. Main processing loop
         processed_count = 0
-        while True:
+        while not self._stop_requested:
             pending_batch = self.state_manager.get_pending_pages(limit=50)
             if not pending_batch:
                 break
 
             for item in pending_batch:
+                if self._stop_requested:
+                    logger.info("Crawl durch Benutzer abgebrochen.")
+                    return self.state_manager.get_stats()
+
                 if self.config.max_pages and processed_count >= self.config.max_pages:
                     logger.info(f"Maximale Seitenanzahl ({self.config.max_pages}) erreicht.")
                     return self.state_manager.get_stats()
