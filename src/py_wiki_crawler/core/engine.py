@@ -32,7 +32,9 @@ class EngineConfig:
     max_pages: int | None = None
     max_depth: int = 5
     save_images: bool = True
-    resume: bool = False
+    # False: re-runs skip finished pages and only retry failed/missing ones.
+    # True: every page is downloaded again.
+    force_refresh: bool = False
     image_workers: int = 4
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -111,19 +113,33 @@ class CrawlEngine:
         logger.info(f"Starte Crawl für: {self.config.base_url}")
         logger.info(f"Zielverzeichnis: {self.output_dir.resolve()}")
 
-        # 1. Discover or populate initial queue if not resuming or queue empty
-        pending = self.state_manager.get_pending_pages()
-        if not self.config.resume or not pending:
-            discovered_pages: list[tuple[str, str, int]] = []
-            for item in self.extractor.discover_pages(max_pages=self.config.max_pages):
-                if self._stop_requested:
-                    logger.info("Entdeckungsvorgang durch Benutzer abgebrochen.")
-                    break
-                discovered_pages.append(item)
-                if self.on_page_discovered:
-                    self.on_page_discovered(item[0], item[1])
+        # 1. Prepare queue: finished pages from earlier runs stay done,
+        #    failed pages are retried, newly discovered pages are added.
+        if self.config.force_refresh:
+            count = self.state_manager.requeue_all_pages()
+            self._log(f"Alles neu laden: {count} bekannte Seiten werden erneut geladen.")
+        else:
+            stats_before = self.state_manager.get_stats()
+            requeued = self.state_manager.requeue_failed_pages()
+            if stats_before["done_pages"] or requeued:
+                self._log(
+                    f"Vorheriger Lauf erkannt: {stats_before['done_pages']} Seiten bereits "
+                    f"fertig (werden übersprungen), {requeued} fehlgeschlagene Seiten "
+                    f"werden erneut versucht."
+                )
 
-            self.state_manager.add_pages_bulk(discovered_pages)
+        discovered_pages: list[tuple[str, str, int]] = []
+        for item in self.extractor.discover_pages(max_pages=self.config.max_pages):
+            if self._stop_requested:
+                logger.info("Entdeckungsvorgang durch Benutzer abgebrochen.")
+                break
+            discovered_pages.append(item)
+            if self.on_page_discovered:
+                self.on_page_discovered(item[0], item[1])
+
+        new_count = self.state_manager.add_pages_bulk(discovered_pages)
+        if new_count > 0:
+            self._log(f"{new_count} neue Seiten in die Warteschlange aufgenommen.")
 
         # 2. Main processing loop
         processed_count = 0
@@ -161,6 +177,12 @@ class CrawlEngine:
         )
         return stats
 
+    def _log(self, message: str, level: str = "info") -> None:
+        """Logs a message and forwards it to the UI callback."""
+        logger.info(message)
+        if self.on_log:
+            self.on_log(message, level)
+
     def _process_single_page(self, url: str, fallback_title: str, depth: int) -> None:
         """Fetches, converts, and writes a single wiki article."""
         result = self.extractor.fetch_page_content(url)
@@ -178,11 +200,16 @@ class CrawlEngine:
         full_dest_path = self.output_dir / rel_file_path
         full_dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Image resolver function
+        # Image resolver function; tracks failed images so the page is retried next run
+        failed_images: list[str] = []
+
         def resolve_image(img_url: str) -> Path | None:
             if not self.image_downloader:
                 return None
-            return self.image_downloader.process_and_download_image(img_url)
+            local_path = self.image_downloader.process_and_download_image(img_url)
+            if local_path is None:
+                failed_images.append(img_url)
+            return local_path
 
         # Convert HTML to Markdown with local relative links
         markdown_text = self.markdown_converter.convert(
@@ -196,12 +223,19 @@ class CrawlEngine:
         with open(full_dest_path, "w", encoding="utf-8") as f:
             f.write(markdown_text)
 
-        self.state_manager.mark_page_done(
-            url=url, title=final_title, local_path=rel_file_path.as_posix(), http_status=200
-        )
-
-        if self.on_page_processed:
-            self.on_page_processed(url, final_title, full_dest_path)
+        if failed_images:
+            # Markdown is written (with online image links), but the page counts as
+            # incomplete so the next run retries the missing images.
+            error = f"Gespeichert, aber {len(failed_images)} Bild(er) nicht geladen"
+            self.state_manager.mark_page_failed(url, error)
+            if self.on_page_failed:
+                self.on_page_failed(url, final_title, error)
+        else:
+            self.state_manager.mark_page_done(
+                url=url, title=final_title, local_path=rel_file_path.as_posix(), http_status=200
+            )
+            if self.on_page_processed:
+                self.on_page_processed(url, final_title, full_dest_path)
 
         # If using HTML Crawler, discover subsequent child links within max_depth
         if isinstance(self.extractor, HtmlCrawlerExtractor) and depth < self.config.max_depth:

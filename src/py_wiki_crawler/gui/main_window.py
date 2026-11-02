@@ -216,12 +216,13 @@ class MainWindow(QMainWindow):
         self.chk_images.setChecked(True)
         options_layout.addWidget(self.chk_images)
 
-        # Resume Checkbox
-        self.chk_resume = QCheckBox("Fortsetzen (Resume)")
-        self.chk_resume.setToolTip(
-            "Setzt einen unterbrochenen Crawl anhand der SQLite-Datenbank fort"
+        # Force refresh checkbox (re-runs continue automatically otherwise)
+        self.chk_force = QCheckBox("Alles neu laden")
+        self.chk_force.setToolTip(
+            "Ohne Haken überspringt ein erneuter Lauf bereits fertige Seiten und lädt nur "
+            "fehlgeschlagene bzw. neue Seiten nach.\nMit Haken werden alle Seiten neu geladen."
         )
-        options_layout.addWidget(self.chk_resume)
+        options_layout.addWidget(self.chk_force)
 
         options_layout.addStretch()
         input_layout.addLayout(options_layout, 2, 0, 1, 3)
@@ -463,7 +464,7 @@ class MainWindow(QMainWindow):
             max_pages=max_p,
             max_depth=self.spn_max_depth.value(),
             save_images=self.chk_images.isChecked(),
-            resume=self.chk_resume.isChecked(),
+            force_refresh=self.chk_force.isChecked(),
         )
 
         # Reset counters

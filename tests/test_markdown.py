@@ -49,3 +49,36 @@ def test_markdown_conversion_and_link_rewriting(tmp_path):
     # Verify image link rewritten to relative path:
     # Weapons/Master_Sword.md -> assets/images/sword_abcdef12.png
     assert "![Sword Image](../assets/images/sword_abcdef12.png)" in md_output
+
+
+def test_lazy_loaded_fandom_images_use_data_src(tmp_path):
+    converter = MarkdownConverter(base_url="https://game.fandom.com", output_dir=tmp_path)
+    placeholder = (
+        "data:image/gif;base64,R0lGODlhAQABAIABAAAAAP///yH5BAEAAAEALAAAAAABAAEAQAICTAEAOw=="
+    )
+    real_url = "https://static.wikia.nocookie.net/game/images/a/ab/Acid.png/revision/latest"
+    sample_html = f"""
+    <div class="mw-parser-output">
+        <img src="{placeholder}" data-src="{real_url}" class="lazyload" alt="Acid" />
+        <img src="{placeholder}" alt="Nur Platzhalter" />
+    </div>
+    """
+    requested: list[str] = []
+
+    def failing_resolver(img_url: str) -> None:
+        requested.append(img_url)
+        return None
+
+    md_output = converter.convert(
+        title="Acid",
+        html_content=sample_html,
+        source_url="https://game.fandom.com/wiki/Acid",
+        current_md_path=tmp_path / "Acid.md",
+        image_resolver=failing_resolver,
+    )
+
+    # Only the real URL is requested, never the base64 placeholder
+    assert requested == [real_url]
+    # Failed download falls back to the online URL instead of the placeholder
+    assert real_url in md_output
+    assert md_output.count("data:image") <= 1  # only the placeholder-only image keeps it

@@ -8,7 +8,7 @@ def test_cli_parser_defaults():
     assert args.output == "wiki_export"
     assert args.delay == 0.4
     assert args.no_images is False
-    assert args.resume is False
+    assert args.force is False
 
 
 def test_cli_parser_flags():
@@ -25,7 +25,7 @@ def test_cli_parser_flags():
             "--max-depth",
             "3",
             "--no-images",
-            "--resume",
+            "--force",
         ]
     )
     assert args.output == "custom_dir"
@@ -33,4 +33,4 @@ def test_cli_parser_flags():
     assert args.max_pages == 50
     assert args.max_depth == 3
     assert args.no_images is True
-    assert args.resume is True
+    assert args.force is True
