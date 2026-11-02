@@ -41,6 +41,19 @@ UNWANTED_SELECTORS = [
 ]
 
 
+def get_real_image_src(img) -> str | None:
+    """
+    Returns the real image URL of an <img> tag.
+    Fandom lazy-loads images: 'src' holds a tiny base64 placeholder GIF,
+    the actual URL is in 'data-src'. Inline data: URIs are never returned.
+    """
+    for attr in ("data-src", "src"):
+        value = (img.get(attr) or "").strip()
+        if value and not value.startswith("data:"):
+            return value
+    return None
+
+
 class MarkdownConverter:
     """Converts wiki HTML into clean Markdown with local cross-links and image references."""
 
@@ -84,11 +97,13 @@ class MarkdownConverter:
 
         # 1. Process images
         for img in content_container.find_all("img"):
-            img_src = img.get("src") or img.get("data-src")
+            img_src = get_real_image_src(img)
             if not img_src:
                 continue
 
             absolute_img_url = urljoin(source_url, img_src)
+            # Replace lazy-load placeholders so the image still works online if the download fails
+            img["src"] = absolute_img_url
 
             if image_resolver:
                 local_img_path = image_resolver(absolute_img_url)

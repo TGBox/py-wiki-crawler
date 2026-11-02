@@ -14,7 +14,7 @@ Erfasst Spiele-Wikis und Dokumentationen (Fandom, MediaWiki sowie generische HTM
 - **HTML Fallback-Crawler:** Rekursiver Breadth-First-Crawler (BFS) mit Klicktiefenbegrenzung (`--max-depth`) und automatischer Filterung von Edit-, Versions- und Spezialseiten für Wikis ohne API.
 - **Vollauflösende Grafiken & SHA-256 Deduplizierung:** Bereinigt verkleinerte Thumbnail-Parameter auf Originaldateien und speichert Bilder dedupliziert in `assets/images/`.
 - **Intelligente Querverlinkung:** Interne Wiki-Links (`/wiki/Item/Sword`) werden in relative Pfade auf die lokalen `.md`-Dateien umgeschrieben.
-- **SQLite-Checkpointing & Resilienz:** Speichert den Zustand fortlaufend in `.crawler_state.db` und unterstützt das nahtlose Fortsetzen abgebrochener Downloads (`--resume`).
+- **SQLite-Checkpointing & Resilienz:** Speichert den Zustand fortlaufend in `.crawler_state.db` und setzt bei jedem erneuten Lauf automatisch fort: Fertige Seiten werden übersprungen, fehlgeschlagene Seiten und Seiten mit fehlenden Bildern erneut versucht (`--force` lädt alles neu).
 - **Höfliches Scraping:** Integriertes Rate-Limiting mit Exponential Backoff bei HTTP 429 / 5xx.
 - **Rich Terminal UI:** Übersichtliche Konsolenanzeige mit Live-Fortschrittsbalken und Abschluss-Statistik.
 
@@ -71,8 +71,11 @@ uv run py-wiki-crawler https://genshin-impact.fandom.com
 # Mit Optionen (z. B. Zielordner, Begrenzung und ohne Bilder)
 uv run py-wiki-crawler https://hollowknight.fandom.com -o mein_wiki -m 50
 
-# Einen unterbrochenen Crawl nahtlos fortsetzen
-uv run py-wiki-crawler https://hollowknight.fandom.com -o mein_wiki --resume
+# Erneuter Lauf in denselben Ordner: lädt nur Fehlgeschlagenes/Neues nach
+uv run py-wiki-crawler https://hollowknight.fandom.com -o mein_wiki
+
+# Alles neu laden
+uv run py-wiki-crawler https://hollowknight.fandom.com -o mein_wiki --force
 
 # Tests ausführen
 uv run pytest
@@ -92,6 +95,6 @@ uv run ruff format .
 | `-m`, `--max-pages` | Maximale Seitenanzahl zum Herunterladen | `None` (alle) |
 | `--max-depth` | Maximale Klicktiefe für HTML-Crawler | `5` |
 | `--no-images` | Download von Bildern deaktivieren | `False` |
-| `--resume` | Abgebrochenen Crawl aus SQLite-DB fortsetzen | `False` |
+| `--force` | Alle Seiten neu laden statt nur Fehlgeschlagenes/Neues | `False` |
 | `-v`, `--verbose` | Ausführliches Debug-Logging | `False` |
 | `--version` | Programmversion anzeigen | - |

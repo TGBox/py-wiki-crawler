@@ -43,3 +43,17 @@ def test_state_manager_lifecycle(tmp_path):
     assert stats["done_pages"] == 1
     assert stats["pending_pages"] == 0
     assert stats["total_images"] == 1
+
+
+def test_requeue_failed_and_all_pages(tmp_path):
+    manager = StateManager(tmp_path / ".crawler_state.db")
+    manager.add_pages_bulk([("u1", "A", 0), ("u2", "B", 0), ("u3", "C", 0)])
+    manager.mark_page_done("u1", "A", "A.md")
+    manager.mark_page_failed("u2", "Kein Inhalt")
+
+    assert manager.requeue_failed_pages() == 1
+    pending = {p["url"] for p in manager.get_pending_pages()}
+    assert pending == {"u2", "u3"}
+
+    assert manager.requeue_all_pages() == 3
+    assert len(manager.get_pending_pages()) == 3

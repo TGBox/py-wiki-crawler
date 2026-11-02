@@ -109,6 +109,24 @@ class StateManager:
                 conn.commit()
                 return cursor.rowcount
 
+    def requeue_failed_pages(self) -> int:
+        """Puts all failed pages back into the queue. Returns the number of requeued pages."""
+        with self._lock:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "UPDATE pages SET status = 'pending' WHERE status = 'failed'"
+                )
+                conn.commit()
+                return cursor.rowcount
+
+    def requeue_all_pages(self) -> int:
+        """Puts every known page back into the queue (full re-download)."""
+        with self._lock:
+            with self._get_connection() as conn:
+                cursor = conn.execute("UPDATE pages SET status = 'pending'")
+                conn.commit()
+                return cursor.rowcount
+
     def get_pending_pages(self, limit: int | None = None) -> list[dict[str, Any]]:
         with self._lock:
             with self._get_connection() as conn:

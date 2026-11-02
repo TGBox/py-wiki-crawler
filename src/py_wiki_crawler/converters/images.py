@@ -33,6 +33,8 @@ class ImageDownloader:
         self.state_manager = state_manager
         self.rate_limiter = rate_limiter or RateLimiter(base_delay=0.1)
         self.session = session or requests.Session()
+        # URLs that already failed in this run (avoids hammering broken URLs on every page)
+        self.failed_urls: set[str] = set()
 
     def process_and_download_image(self, raw_img_url: str) -> Path | None:
         """
@@ -43,7 +45,12 @@ class ImageDownloader:
         4. Reuses file if duplicate hash exists; otherwise saves to assets/images/.
         5. Returns the local Path of the saved image relative to output_dir.
         """
+        if raw_img_url.startswith("data:"):
+            return None
+
         full_url = clean_image_url(raw_img_url)
+        if full_url in self.failed_urls:
+            return None
 
         # Check by URL first
         existing_record = self.state_manager.get_image_by_url(full_url)
@@ -60,11 +67,13 @@ class ImageDownloader:
                 description=f"Bild-Download {full_url}",
             )
             if resp.status_code != 200:
-                logger.debug(f"Bild konnte nicht geladen werden ({resp.status_code}): {full_url}")
+                logger.warning(f"Bild konnte nicht geladen werden ({resp.status_code}): {full_url}")
+                self.failed_urls.add(full_url)
                 return None
 
             content = resp.content
             if not content:
+                self.failed_urls.add(full_url)
                 return None
 
             sha256_hash = hashlib.sha256(content).hexdigest()
@@ -122,4 +131,5 @@ class ImageDownloader:
 
         except Exception as e:
             logger.warning(f"Fehler beim Download von Bild {full_url}: {e}")
+            self.failed_urls.add(full_url)
             return None

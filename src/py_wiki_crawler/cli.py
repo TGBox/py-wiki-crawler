@@ -83,9 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-images", action="store_true", help="Deaktiviert den Download von Bildern und Grafiken"
     )
     parser.add_argument(
-        "--resume",
+        "--force",
         action="store_true",
-        help="Setzt einen abgebrochenen Crawl anhand der SQLite-Datenbank fort",
+        help=(
+            "Lädt alle Seiten neu. Ohne diese Option überspringt ein erneuter Lauf "
+            "fertige Seiten und versucht nur fehlgeschlagene/neue Seiten"
+        ),
     )
     parser.add_argument(
         "--gui",
@@ -128,7 +131,9 @@ def main() -> None:
     img_status = (
         "Deaktiviert" if args.no_images else "Aktiv (Originalauflösung + SHA-256 Deduplizierung)"
     )
-    resume_status = "Resume (Fortsetzen)" if args.resume else "Neuer Export"
+    mode_status = (
+        "Alles neu laden" if args.force else "Fortsetzen (fertige Seiten werden übersprungen)"
+    )
 
     # Header Panel
     console.print(
@@ -136,7 +141,7 @@ def main() -> None:
             f"[bold cyan]py-wiki-crawler v{__version__}[/]\n"
             f"[bold]Wiki-URL:[/] [underline]{wiki_url}[/]\n"
             f"[bold]Zielordner:[/] {output_path}\n"
-            f"[bold]Modus:[/] {resume_status}\n"
+            f"[bold]Modus:[/] {mode_status}\n"
             f"[bold]Bilder:[/] {img_status}",
             title="[bold green]Wiki Export Manager[/]",
             border_style="cyan",
@@ -150,7 +155,7 @@ def main() -> None:
         max_pages=args.max_pages,
         max_depth=args.max_depth,
         save_images=not args.no_images,
-        resume=args.resume,
+        force_refresh=args.force,
     )
 
     engine = CrawlEngine(config)

@@ -47,6 +47,7 @@ class CrawlWorker(QObject):
             self.engine.on_page_discovered = on_discovered
             self.engine.on_page_processed = on_processed
             self.engine.on_page_failed = on_failed
+            self.engine.on_log = lambda message, level: self.signal_log.emit(message, level)
 
             stats = self.engine.run()
             self.signal_finished.emit(stats)
