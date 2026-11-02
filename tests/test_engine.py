@@ -57,3 +57,26 @@ def test_force_refresh_reloads_everything(tmp_path):
     extractor.fetched.clear()
     _make_engine(tmp_path, extractor, force=True).run()
     assert sorted(extractor.fetched) == ["https://w.org/wiki/A", "https://w.org/wiki/B"]
+
+
+class RedirectExtractor(FakeExtractor):
+    """'a' is a redirect resolving to the same article as 'A'."""
+
+    def discover_pages(self, max_pages: int | None = None) -> Iterator[tuple[str, str, int]]:
+        yield ("https://w.org/wiki/A", "A", 0)
+        yield ("https://w.org/wiki/a", "a", 0)
+
+    def fetch_page_content(self, url_or_title: str) -> tuple[str, str, str] | None:
+        self.fetched.append(url_or_title)
+        return ("A", "<div class='mw-parser-output'><p>A</p></div>", url_or_title)
+
+
+def test_redirects_are_skipped_and_not_retried(tmp_path):
+    extractor = RedirectExtractor()
+    stats = _make_engine(tmp_path, extractor).run()
+    assert stats["done_pages"] == 1
+    assert stats["failed_pages"] == 0
+
+    extractor.fetched.clear()
+    _make_engine(tmp_path, extractor).run()
+    assert extractor.fetched == []

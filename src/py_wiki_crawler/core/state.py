@@ -109,6 +109,30 @@ class StateManager:
                 conn.commit()
                 return cursor.rowcount
 
+    def is_local_path_done(self, local_path: str, exclude_url: str) -> bool:
+        """Checks whether another URL already exported this file successfully."""
+        with self._lock:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM pages WHERE local_path = ? AND status = 'done' AND url != ?",
+                    (local_path, exclude_url),
+                ).fetchone()
+                return row is not None
+
+    def mark_page_redirect(self, url: str, target_title: str) -> None:
+        """Marks a URL as redirect to an article handled elsewhere (never retried)."""
+        with self._lock:
+            with self._get_connection() as conn:
+                conn.execute(
+                    """
+                    UPDATE pages
+                    SET status = 'redirect', error_message = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE url = ?
+                """,
+                    (f"Weiterleitung auf '{target_title}'", url),
+                )
+                conn.commit()
+
     def requeue_failed_pages(self) -> int:
         """Puts all failed pages back into the queue. Returns the number of requeued pages."""
         with self._lock:

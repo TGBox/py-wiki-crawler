@@ -214,10 +214,16 @@ def main() -> None:
     summary_table.add_row("Zielordner", str(output_path))
 
     console.print("\n", summary_table)
-    console.print(
-        f"[bold green]✔ Export erfolgreich abgeschlossen![/] "
-        f"Dateien liegen in: [underline]{output_path}[/]\n"
-    )
+    if stats.get("cancelled"):
+        status_line = "[bold yellow]■ Export abgebrochen.[/] Erneuter Start setzt fort."
+    elif stats.get("failed_pages"):
+        status_line = (
+            f"[bold yellow]⚠ Export mit {stats['failed_pages']} unvollständigen Seiten "
+            f"beendet.[/] Erneuter Start versucht nur diese erneut."
+        )
+    else:
+        status_line = "[bold green]✔ Export erfolgreich abgeschlossen![/]"
+    console.print(f"{status_line} Dateien liegen in: [underline]{output_path}[/]\n")
 
 
 if __name__ == "__main__":

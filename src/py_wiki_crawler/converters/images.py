@@ -16,6 +16,23 @@ from py_wiki_crawler.utils.url_utils import clean_image_url
 
 logger = logging.getLogger("py_wiki_crawler.images")
 
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
+CONTENT_TYPE_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+    "image/bmp": ".bmp",
+    "image/avif": ".avif",
+}
+
+
+def extension_from_content_type(content_type: str) -> str | None:
+    """Maps a Content-Type header (e.g. 'image/webp; charset=...') to a file extension."""
+    mime = content_type.split(";", 1)[0].strip().lower()
+    return CONTENT_TYPE_EXTENSIONS.get(mime)
+
 
 class ImageDownloader:
     """Manages downloading, deduplicating, and storing wiki reference images."""
@@ -26,6 +43,7 @@ class ImageDownloader:
         state_manager: StateManager,
         rate_limiter: RateLimiter | None = None,
         session: requests.Session | None = None,
+        referer: str | None = None,
     ):
         self.output_dir = output_dir
         self.images_dir = output_dir / "assets" / "images"
@@ -33,6 +51,8 @@ class ImageDownloader:
         self.state_manager = state_manager
         self.rate_limiter = rate_limiter or RateLimiter(base_delay=0.1)
         self.session = session or requests.Session()
+        # Fandom's image CDN answers 403 without a Referer from the wiki itself
+        self.request_headers = {"Referer": referer} if referer else {}
         # URL -> failure reason for this run (avoids hammering broken URLs on every page)
         self.failed_urls: dict[str, str] = {}
 
@@ -63,7 +83,9 @@ class ImageDownloader:
         # Download stream with retry
         try:
             resp = self.rate_limiter.execute_with_retry(
-                lambda: self.session.get(full_url, stream=True, timeout=15),
+                lambda: self.session.get(
+                    full_url, headers=self.request_headers, stream=True, timeout=15
+                ),
                 description=f"Bild-Download {full_url}",
             )
             if resp.status_code != 200:
@@ -97,18 +119,12 @@ class ImageDownloader:
             parsed_path = unquote(urlparse(full_url).path)
             orig_filename = Path(parsed_path).name or "image.png"
             stem = sanitize_path_segment(Path(orig_filename).stem)
-            ext = Path(orig_filename).suffix.lower()
-            if not ext or ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}:
-                content_type = resp.headers.get("Content-Type", "")
-                if "jpeg" in content_type:
-                    ext = ".jpg"
-                elif "gif" in content_type:
-                    ext = ".gif"
-                elif "svg" in content_type:
-                    ext = ".svg"
-                elif "webp" in content_type:
-                    ext = ".webp"
-                else:
+            # The server may convert formats (Fandom serves .png URLs as WebP),
+            # so the Content-Type decides the extension; the URL suffix is the fallback.
+            ext = extension_from_content_type(resp.headers.get("Content-Type", ""))
+            if not ext:
+                ext = Path(orig_filename).suffix.lower()
+                if ext not in IMAGE_EXTENSIONS:
                     ext = ".png"
 
             # Create collision-safe filename: {stem}_{hash[:8]}{ext}

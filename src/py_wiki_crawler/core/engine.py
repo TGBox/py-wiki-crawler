@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -21,6 +22,12 @@ from py_wiki_crawler.utils.path_utils import title_to_relative_path
 from py_wiki_crawler.utils.url_utils import clean_image_url
 
 logger = logging.getLogger("py_wiki_crawler.engine")
+
+
+def _site_origin(url: str) -> str:
+    """Returns scheme and host of a URL, e.g. 'https://noita.fandom.com'."""
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 @dataclass
@@ -66,6 +73,7 @@ class CrawlEngine:
                 state_manager=self.state_manager,
                 rate_limiter=self.rate_limiter,
                 session=self.session,
+                referer=_site_origin(config.base_url) + "/",
             )
 
         self.markdown_converter = MarkdownConverter(
@@ -74,6 +82,8 @@ class CrawlEngine:
 
         self.extractor: BaseExtractor = self._init_extractor()
         self._stop_requested = False
+        # Article files already written in this run (detects redirects to the same article)
+        self._written_paths: set[str] = set()
 
         # Callbacks for CLI / UI progress tracking
         self.on_page_discovered: Callable[[str, str], None] | None = None
@@ -152,11 +162,11 @@ class CrawlEngine:
             for item in pending_batch:
                 if self._stop_requested:
                     logger.info("Crawl durch Benutzer abgebrochen.")
-                    return self.state_manager.get_stats()
+                    return self._final_stats()
 
                 if self.config.max_pages and processed_count >= self.config.max_pages:
                     logger.info(f"Maximale Seitenanzahl ({self.config.max_pages}) erreicht.")
-                    return self.state_manager.get_stats()
+                    return self._final_stats()
 
                 url = item["url"]
                 title = item["title"]
@@ -171,11 +181,17 @@ class CrawlEngine:
                     if self.on_page_failed:
                         self.on_page_failed(url, title, str(e))
 
-        stats = self.state_manager.get_stats()
+        stats = self._final_stats()
         logger.info(
             f"Crawl abgeschlossen: {stats['done_pages']} Seiten exportiert, "
             f"{stats['failed_pages']} fehlgeschlagen, {stats['total_images']} Bilder gesichert."
         )
+        return stats
+
+    def _final_stats(self) -> dict[str, int]:
+        """Returns the crawl statistics plus whether the run was cancelled."""
+        stats = self.state_manager.get_stats()
+        stats["cancelled"] = int(self._stop_requested)
         return stats
 
     def _log(self, message: str, level: str = "info") -> None:
@@ -209,6 +225,14 @@ class CrawlEngine:
 
         # Determine target file path
         rel_file_path = title_to_relative_path(final_title)
+
+        # Redirects (e.g. 'Aiming arc' -> 'Aiming Arc') resolve to an article that is
+        # handled under its own URL; skip them instead of downloading it twice.
+        rel_key = rel_file_path.as_posix()
+        if rel_key in self._written_paths or self.state_manager.is_local_path_done(rel_key, url):
+            self.state_manager.mark_page_redirect(url, final_title)
+            return
+        self._written_paths.add(rel_key)
         full_dest_path = self.output_dir / rel_file_path
         full_dest_path.parent.mkdir(parents=True, exist_ok=True)
 

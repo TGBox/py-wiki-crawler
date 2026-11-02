@@ -580,15 +580,28 @@ class MainWindow(QMainWindow):
         self.card_images.set_value(str(total_images))
         self.card_failed.set_value(str(failed_pages))
 
-        self.statusBar().showMessage(
-            f"Export erfolgreich abgeschlossen! ({done_pages} Seiten, {total_images} Bilder)"
-        )
-        self._append_log("✔ Crawl und Konvertierung erfolgreich abgeschlossen!", "success")
+        if stats.get("cancelled"):
+            headline = "Export abgebrochen"
+            summary = "Der Wiki-Export wurde abgebrochen. Ein erneuter Start setzt ihn fort."
+            self._append_log("■ Crawl abgebrochen.", "warning")
+        elif failed_pages:
+            headline = "Export mit Fehlern abgeschlossen"
+            summary = (
+                f"Der Wiki-Export ist durchgelaufen, {failed_pages} Seite(n) sind unvollständig. "
+                "Ein erneuter Start versucht nur diese erneut."
+            )
+            self._append_log(f"⚠ Crawl beendet, {failed_pages} Seite(n) unvollständig.", "warning")
+        else:
+            headline = "Export abgeschlossen"
+            summary = "Der Wiki-Export wurde erfolgreich abgeschlossen!"
+            self._append_log("✔ Crawl und Konvertierung erfolgreich abgeschlossen!", "success")
+
+        self.statusBar().showMessage(f"{headline} ({done_pages} Seiten, {total_images} Bilder)")
 
         QMessageBox.information(
             self,
-            "Export abgeschlossen",
-            f"Der Wiki-Export wurde erfolgreich abgeschlossen!\n\n"
+            headline,
+            f"{summary}\n\n"
             f"• Exportierte Artikel: {done_pages}\n"
             f"• Gespeicherte Grafiken: {total_images}\n"
             f"• Fehlgeschlagen: {failed_pages}\n\n"
